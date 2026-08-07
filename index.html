@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Xếp lịch nhân viên – Bà Điểm & Bình Long</title>
+<title>Xếp lịch nhân viên – 8/6 Tiền Lân 20 & Bình Long</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -119,7 +119,7 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
 
 <div class="container">
   <h1>📅 Xếp lịch nhân viên – Cả năm</h1>
-  <p class="subtitle">Bà Điểm → ekip ca | Các văn phòng khác → manual | Chọn tháng/năm bất kỳ</p>
+  <p class="subtitle">8/6 Tiền Lân 20 → ekip ca | Các văn phòng khác → manual | Chọn tháng/năm bất kỳ</p>
 
   <div class="tabs">
     <div class="tab active" onclick="switchTab('input',this)">✏️ Nhập lịch</div>
@@ -153,7 +153,7 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
     <div class="grid2">
       <div>
         <div class="card">
-          <div class="card-title">🏢 Bà Điểm – Hóc Môn (ekip ca)</div>
+          <div class="card-title">🏢 8/6 Tiền Lân 20 (ekip ca)</div>
           <div id="bd-container"></div>
         </div>
       </div>
@@ -644,7 +644,7 @@ function checkConflicts(){
   const el=document.getElementById('conflict-alert');
   if(conflicts.length){
     el.style.display='';
-    el.innerHTML='⚠️ Cùng nhân viên ở 2 ca Bà Điểm: '+conflicts.map(([n,v])=>`<b>${n}</b> (${v.join(', ')})`).join('; ');
+    el.innerHTML='⚠️ Cùng nhân viên ở 2 ca 8/6 Tiền Lân 20: '+conflicts.map(([n,v])=>`<b>${n}</b> (${v.join(', ')})`).join('; ');
   } else el.style.display='none';
 }
 
@@ -1004,7 +1004,7 @@ function renderPreview(){
   document.getElementById('preview-grid-head').innerHTML=headHtml;
 
   // Sections: VP Bà Điểm (ekip ca) + từng văn phòng khác
-  const sections=[{title:'VP Bà Điểm',shifts:BD_SHIFTS.map(sh=>({time:sh.time,label:sh.label,dataKey:sh.key,type:'bd'}))}];
+  const sections=[{title:'8/6 Tiền Lân 20',shifts:BD_SHIFTS.map(sh=>({time:sh.time,label:sh.label,dataKey:sh.key,type:'bd'}))}];
   officeList.forEach(o=>{
     sections.push({title:o.name,shifts:o.shifts.map(s=>({time:s.time,label:s.type,dataKey:`o${o.id}-s${s.id}`,type:'other'}))});
   });
