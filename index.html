@@ -97,6 +97,22 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
 .empty-state{text-align:center;padding:40px 20px;color:#999}
 .empty-state .icon{font-size:36px;margin-bottom:8px}
 .history-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;background:#f0f0f0;color:#555;margin:2px}
+/* GRID TUẦN (Tab Tổng hợp) */
+#preview-grid{font-size:12px}
+#preview-grid th{background:#1F4E79;color:#fff;padding:8px 6px;text-align:center;font-weight:600;white-space:nowrap;position:sticky;top:0}
+#preview-grid th.corner{background:#f4f6f8;color:#555;text-align:left}
+#preview-grid th .dow{font-size:10px;opacity:.85;font-weight:500}
+#preview-grid td{padding:6px 8px;border-bottom:1px solid #eee;border-right:1px solid #f0f0f0;vertical-align:middle;text-align:center;font-size:12px}
+#preview-grid td.loc-cell{text-align:left;font-weight:600;color:#1F4E79;background:#F5F9FC;vertical-align:top;padding-top:9px;white-space:nowrap}
+#preview-grid td.time-cell{text-align:left;color:#666;background:#FAFBFC;white-space:nowrap}
+#preview-grid tr.grp-first td{border-top:2px solid #dde6ee}
+#preview-grid td.empty-cell{color:#ccc}
+#preview-grid td.has-nv{font-weight:600}
+#preview-grid tr:hover td{background:#EBF5FF}
+#preview-grid tr:hover td.loc-cell{background:#E3F0FF}
+#preview-grid tr:hover td.time-cell{background:#E3F0FF}
+.nv-tag{display:inline-block;margin:1px 2px;padding:1px 6px;border-radius:8px;font-size:11px}
+.today-col{background:#FFF8E1!important}
 </style>
 </head>
 <body>
@@ -153,9 +169,20 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
   <!-- TAB TỔNG HỢP -->
   <div id="tab-preview" style="display:none">
     <div class="stats-bar" id="stats-bar"></div>
-    <div class="card">
-      <div class="card-title">Chi tiết theo ngày</div>
-      <div id="preview-content"></div>
+    <div class="card" style="padding:10px 14px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="shiftPreviewWeek(-1)">◀</button>
+        <div id="preview-week-label" style="font-size:13px;font-weight:600;color:#1F4E79;min-width:150px;text-align:center"></div>
+        <button class="btn btn-sm" onclick="shiftPreviewWeek(1)">▶</button>
+        <button class="btn btn-sm" onclick="jumpPreviewToday()">Hôm nay</button>
+        <div style="margin-left:auto;font-size:11px;color:#999">Cuộn ngang để xem hết tuần trên điện thoại →</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table id="preview-grid" style="min-width:820px">
+        <thead><tr id="preview-grid-head"></tr></thead>
+        <tbody id="preview-grid-body"></tbody>
+      </table>
     </div>
   </div>
 
@@ -915,29 +942,97 @@ function downloadExcel(){
   XLSX.writeFile(wb,'RawData_Full.xlsx');
   toast('⬇️ Đang tải Excel...');
 }
+// ── TAB TỔNG HỢP — BẢNG TUẦN ──────────────────────────────
+let previewWeekStart=null; // Date đại diện Thứ 2 của tuần đang xem
+
+function mondayOf(y,m,d){
+  const dt=new Date(y,m-1,d);
+  const dow=dt.getDay(); // 0=CN,1=T2,...
+  const diff=(dow===0?-6:1-dow); // lùi về Thứ 2
+  dt.setDate(dt.getDate()+diff);
+  return dt;
+}
+function ensurePreviewWeek(){
+  if(!previewWeekStart)previewWeekStart=mondayOf(curYear,curMonth,curDay);
+}
+function shiftPreviewWeek(dir){
+  ensurePreviewWeek();
+  previewWeekStart.setDate(previewWeekStart.getDate()+dir*7);
+  renderPreview();
+}
+function jumpPreviewToday(){
+  const t=new Date();
+  previewWeekStart=mondayOf(t.getFullYear(),t.getMonth()+1,t.getDate());
+  renderPreview();
+}
+function weekDates(){
+  ensurePreviewWeek();
+  const arr=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(previewWeekStart);d.setDate(d.getDate()+i);
+    arr.push(d);
+  }
+  return arr;
+}
+function fmtDM(d){return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
+function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+
 function renderPreview(){
+  ensurePreviewWeek();
   const rows=buildRecords();
   const byDay={};rows.forEach(r=>{if(!byDay[r.isoKey])byDay[r.isoKey]=[];byDay[r.isoKey].push(r);});
-  const days=Object.keys(byDay).sort();
+  const daysAll=Object.keys(byDay).sort();
   document.getElementById('stats-bar').innerHTML=`
     <div class="stat"><b>${rows.length}</b>Tổng bản ghi</div>
-    <div class="stat"><b>${days.length}</b>Ngày đã nhập</div>
+    <div class="stat"><b>${daysAll.length}</b>Ngày đã nhập</div>
     <div class="stat"><b>${rows.filter(r=>r.loai==='Ca Sáng').length}</b>Ca sáng</div>
     <div class="stat"><b>${rows.filter(r=>r.loai==='Ca Tối').length}</b>Ca tối</div>
     <div class="stat"><b>${rows.filter(r=>r.loai==='Trực đêm').length}</b>Trực đêm</div>
   `;
-  if(!days.length){document.getElementById('preview-content').innerHTML='<p style="color:#999;font-size:13px">Chưa có dữ liệu.</p>';return;}
-  document.getElementById('preview-content').innerHTML=days.map(dk=>{
-    const rs=byDay[dk];
-    const chips=rs.map(r=>{const c=getNVColor(r.nv);
-      return`<span style="background:${c.bg};border:1px solid ${c.bg};border-radius:12px;padding:2px 8px;font-size:11px;color:${c.txt};display:inline-flex;gap:4px;align-items:center"><b>${r.nv}</b><span style="opacity:.7">${r.ca.split(' ')[0]}</span></span>`;
-    }).join('');
-    return`<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #eee">
-      <span style="font-size:12px;font-weight:600">${rs[0].ngay} · ${rs[0].thu}</span>
-      <span style="font-size:11px;color:#888;margin-left:8px">${rs.length} lượt ca</span>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${chips}</div>
-    </div>`;
-  }).join('');
+
+  const days=weekDates();
+  const today=new Date();
+  document.getElementById('preview-week-label').textContent=`${fmtDM(days[0])} → ${fmtDM(days[6])}`;
+
+  // Header
+  const dowShort=['CN','T2','T3','T4','T5','T6','T7'];
+  let headHtml=`<th class="corner" style="min-width:150px">Bộ phận / Thời gian</th>`;
+  days.forEach(d=>{
+    const isToday=isSameDay(d,today);
+    headHtml+=`<th class="${isToday?'today-col':''}" style="min-width:96px"><div>${fmtDM(d)}</div><div class="dow">${dowShort[d.getDay()]}</div></th>`;
+  });
+  document.getElementById('preview-grid-head').innerHTML=headHtml;
+
+  // Sections: VP Bà Điểm (ekip ca) + từng văn phòng khác
+  const sections=[{title:'VP Bà Điểm',shifts:BD_SHIFTS.map(sh=>({time:sh.time,label:sh.label,dataKey:sh.key,type:'bd'}))}];
+  officeList.forEach(o=>{
+    sections.push({title:o.name,shifts:o.shifts.map(s=>({time:s.time,label:s.type,dataKey:`o${o.id}-s${s.id}`,type:'other'}))});
+  });
+
+  let bodyHtml='';
+  sections.forEach(sec=>{
+    if(!sec.shifts.length)return;
+    sec.shifts.forEach((sh,idx)=>{
+      bodyHtml+=`<tr class="${idx===0?'grp-first':''}">`;
+      if(idx===0){
+        bodyHtml+=`<td class="loc-cell" rowspan="${sec.shifts.length}">${sec.title}</td>`;
+      }
+      bodyHtml+=`<td class="time-cell">${sh.label} · ${sh.time}</td>`;
+      days.forEach(d=>{
+        const key=dateKey(d.getFullYear(),d.getMonth()+1,d.getDate());
+        const data=schedule[key];
+        const names=data?(sh.type==='bd'?(data.bd[sh.dataKey]||[]):(data.other[sh.dataKey]||[])):[];
+        const isToday=isSameDay(d,today);
+        if(names.length){
+          bodyHtml+=`<td class="has-nv ${isToday?'today-col':''}"><u>${names.join(' + ')}</u></td>`;
+        }else{
+          bodyHtml+=`<td class="empty-cell ${isToday?'today-col':''}">—</td>`;
+        }
+      });
+      bodyHtml+='</tr>';
+    });
+  });
+  document.getElementById('preview-grid-body').innerHTML=bodyHtml || '<tr><td style="padding:20px;color:#999">Chưa có văn phòng/ca nào được cấu hình.</td></tr>';
 }
 function renderExport(){
   const rows=buildRecords();
