@@ -127,6 +127,7 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
         <div class="day-label" id="day-label"></div>
         <div id="day-saved-badge" style="display:none;background:#E8F5E9;color:#2E7D32;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600">✓ Đã lưu</div>
         <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="fetchOffList()">🔄 Làm mới OFF</button>
           <button class="btn btn-danger btn-sm" onclick="clearDay()">Xóa ngày</button>
           <button class="btn btn-primary" onclick="saveDay()">✓ Lưu ngày</button>
         </div>
@@ -488,6 +489,37 @@ function changeDay(dir){
   } else setDay(nd);
 }
 
+// ── DANH SÁCH OFF (đồng bộ từ Google Sheet, tab OffRequests) ──
+let offSet=new Set(); // chứa key dạng "YYYY-MM-DD|TÊN_NV"
+const OFF_LS_KEY='sched_off_cache';
+function offKey(dateKey,name){return `${dateKey}|${name}`;}
+function isOff(dateKey,name){return offSet.has(offKey(dateKey,name));}
+function loadOffCache(){
+  try{
+    const raw=localStorage.getItem(OFF_LS_KEY);
+    if(raw)offSet=new Set(JSON.parse(raw));
+  }catch(e){console.error('Lỗi đọc cache OFF:',e);}
+}
+function saveOffCache(){
+  try{localStorage.setItem(OFF_LS_KEY,JSON.stringify([...offSet]));}catch(e){}
+}
+function fetchOffList(silent){
+  const u=(document.getElementById('gs-url')?.value||localStorage.getItem(GS_KEY)||'').trim();
+  if(!u){if(!silent)toast('⚠️ Chưa có Apps Script URL (nhập ở tab Xuất dữ liệu)!');return;}
+  const base=u.split('?')[0];
+  fetch(`${base}?action=offlist`)
+    .then(r=>r.json())
+    .then(res=>{
+      if(res && res.ok && Array.isArray(res.items)){
+        offSet=new Set(res.items.map(it=>offKey(it.date,it.nv)));
+        saveOffCache();
+        if(!silent)toast(`✓ Đã tải ${res.items.length} lượt OFF`);
+        renderBD();renderOther();
+      } else if(!silent){toast('⚠️ Không đọc được danh sách OFF.');}
+    })
+    .catch(err=>{console.error(err);if(!silent)toast('⚠️ Lỗi tải danh sách OFF.');});
+}
+
 // ── RENDER BÀ ĐIỂM ────────────────────────────────────────
 function renderBD(){
   const data=getD(curKey()),used=usedToday(curKey());
@@ -501,10 +533,12 @@ function renderBD(){
     }).join('');
     const full=names.length>=4;
     const btns=!full?avNV.map(nv=>{
-      const n=nv.short,inS=names.includes(n),isUsed=!inS&&used.has(n);
-      const cls=inS?'nv-btn selected':(isUsed?'nv-btn disabled':'nv-btn');
-      const oc=(!inS&&!isUsed)?`onclick="addBD('${sh.key}','${n}')"` :'';
-      return`<span class="${cls}" ${oc}>${n}</span>`;
+      const n=nv.short,inS=names.includes(n),off=!inS&&isOff(curKey(),n),isUsed=!inS&&!off&&used.has(n);
+      const cls=inS?'nv-btn selected':((isUsed||off)?'nv-btn disabled':'nv-btn');
+      const oc=(!inS&&!isUsed&&!off)?`onclick="addBD('${sh.key}','${n}')"` :'';
+      const title=off?'title="Đã đăng ký OFF ngày này"':'';
+      const label=off?`${n} 🚫`:n;
+      return`<span class="${cls}" ${oc} ${title}>${label}</span>`;
     }).join(''):'<span style="font-size:11px;color:#999">Đủ người (max 4)</span>';
     html+=`<div class="shift-block">
       <div class="shift-header">
@@ -544,10 +578,12 @@ function renderOther(){
       return`<span class="chip" style="background:${c.bg};border-color:${c.bg};color:${c.txt}">${n}<span class="rm" onclick="rmOther('${sl.id}','${n}')">×</span></span>`;
     }).join('');
     const btns=avNV.map(nv=>{
-      const n=nv.short,inS=names.includes(n),isUsed=!inS&&used.has(n);
-      const cls=inS?'nv-btn selected':(isUsed?'nv-btn disabled':'nv-btn');
-      const oc=!isUsed?`onclick="togOther('${sl.id}','${n}')"` :'';
-      return`<span class="${cls}" ${oc}>${n}</span>`;
+      const n=nv.short,inS=names.includes(n),off=!inS&&isOff(curKey(),n),isUsed=!inS&&!off&&used.has(n);
+      const cls=inS?'nv-btn selected':((isUsed||off)?'nv-btn disabled':'nv-btn');
+      const oc=(!isUsed&&!off)?`onclick="togOther('${sl.id}','${n}')"` :'';
+      const title=off?'title="Đã đăng ký OFF ngày này"':'';
+      const label=off?`${n} 🚫`:n;
+      return`<span class="${cls}" ${oc} ${title}>${label}</span>`;
     }).join('');
     html+=`<div class="slot-block">
       <div class="slot-label">${sl.label}</div>
@@ -932,10 +968,12 @@ function toast(msg){
 // ── INIT ──────────────────────────────────────────────────
 loadPersisted();
 loadGSUrl();
+loadOffCache();
 initYearMonthSelect();
 setMonth(2026,6);
 renderNVList();
 renderOffices();
+fetchOffList(true); // âm thầm đồng bộ OFF list khi mở app (nếu đã có URL)
 </script>
 </body>
 </html>
