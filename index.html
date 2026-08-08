@@ -1102,6 +1102,20 @@ function renderPreview(){
     });
   }
 
+  // Sắp xếp mỗi bộ phận: nhóm theo loại ca (Sáng → Giữa → Tối → Trực đêm),
+  // trong cùng nhóm thì xếp theo giờ bắt đầu tăng dần (6h trước 9h...). Ca tuỳ chỉnh
+  // (⚙️) nằm đúng ngay dưới các ca cùng loại, không bị dạt xuống cuối bảng nữa.
+  const CAT_ORDER={'Ca Sáng':0,'Ca Giữa':1,'Ca Tối':2,'Trực đêm':3};
+  const catRank=t=>CAT_ORDER.hasOwnProperty(t)?CAT_ORDER[t]:1.5;
+  const startMin=t=>{const m=String(t||'').match(/^(\d{1,2}):(\d{2})/);return m?parseInt(m[1])*60+parseInt(m[2]):9999;};
+  sections.forEach(sec=>{
+    sec.shifts.sort((a,b)=>{
+      const ca=catRank(a.shiftType),cb=catRank(b.shiftType);
+      if(ca!==cb)return ca-cb;
+      return startMin(a.time)-startMin(b.time);
+    });
+  });
+
   const dayKeys=days.map(d=>dateKey(d.getFullYear(),d.getMonth()+1,d.getDate()));
   const totalByDay={};dayKeys.forEach(k=>totalByDay[k]=0);
 
