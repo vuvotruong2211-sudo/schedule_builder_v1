@@ -113,6 +113,15 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
 #preview-grid tr:hover td.time-cell{background:#E3F0FF}
 .nv-tag{display:inline-block;margin:1px 2px;padding:1px 6px;border-radius:8px;font-size:11px}
 .today-col{background:#FFF8E1!important}
+.btn-mode{border:none;background:transparent;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;color:#666;cursor:pointer}
+.btn-mode.active{background:#fff;color:#1F4E79;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+#preview-grid tr.shift-Ca-Sáng td.time-cell,#preview-grid tr.shift-Ca-Sáng td:not(.loc-cell):not(.time-cell){background:#E9F6EC}
+#preview-grid tr.shift-Ca-Giữa td.time-cell,#preview-grid tr.shift-Ca-Giữa td:not(.loc-cell):not(.time-cell){background:#F1F1F6}
+#preview-grid tr.shift-Ca-Tối td.time-cell,#preview-grid tr.shift-Ca-Tối td:not(.loc-cell):not(.time-cell){background:#FCEEE0}
+#preview-grid tr.shift-Trực-đêm td.time-cell,#preview-grid tr.shift-Trực-đêm td:not(.loc-cell):not(.time-cell){background:#F0E6F8}
+#preview-grid tr.row-total td{background:#EAF1F8!important;font-weight:700;color:#1F4E79;border-top:2px solid #cddceb}
+#preview-grid tr.row-off td{background:#FBE4E4!important;font-weight:700;color:#B23434}
+#preview-grid tr.row-off td.loc-cell{color:#B23434}
 </style>
 </head>
 <body>
@@ -171,11 +180,16 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
     <div class="stats-bar" id="stats-bar"></div>
     <div class="card" style="padding:10px 14px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="shiftPreviewWeek(-1)">◀</button>
+        <div style="display:flex;gap:4px;background:#f0f2f5;padding:3px;border-radius:8px">
+          <button class="btn-mode" id="mode-1" onclick="setPreviewMode(1)">1 ngày</button>
+          <button class="btn-mode" id="mode-3" onclick="setPreviewMode(3)">3 ngày</button>
+          <button class="btn-mode" id="mode-7" onclick="setPreviewMode(7)">Cả tuần</button>
+        </div>
+        <button class="btn btn-sm" onclick="shiftPreviewRange(-1)">◀</button>
         <div id="preview-week-label" style="font-size:13px;font-weight:600;color:#1F4E79;min-width:150px;text-align:center"></div>
-        <button class="btn btn-sm" onclick="shiftPreviewWeek(1)">▶</button>
+        <button class="btn btn-sm" onclick="shiftPreviewRange(1)">▶</button>
         <button class="btn btn-sm" onclick="jumpPreviewToday()">Hôm nay</button>
-        <div style="margin-left:auto;font-size:11px;color:#999">Cuộn ngang để xem hết tuần trên điện thoại →</div>
+        <div style="margin-left:auto;font-size:11px;color:#999">Cuộn ngang để xem hết trên điện thoại →</div>
       </div>
     </div>
     <div class="card" style="padding:0;overflow-x:auto">
@@ -964,23 +978,37 @@ function mondayOf(y,m,d){
   dt.setDate(dt.getDate()+diff);
   return dt;
 }
+let previewMode=7; // 1, 3 hoặc 7 (Cả tuần)
 function ensurePreviewWeek(){
   if(!previewWeekStart)previewWeekStart=mondayOf(curYear,curMonth,curDay);
 }
-function shiftPreviewWeek(dir){
+function setPreviewMode(m){
   ensurePreviewWeek();
-  previewWeekStart.setDate(previewWeekStart.getDate()+dir*7);
+  if(previewMode===7&&m!==7){
+    // đang ở Cả tuần chuyển sang 1/3 ngày → bắt đầu từ đầu tuần đang xem
+  } else if(m===7){
+    previewWeekStart=mondayOf(previewWeekStart.getFullYear(),previewWeekStart.getMonth()+1,previewWeekStart.getDate());
+  }
+  previewMode=m;
+  renderPreview();
+}
+function shiftPreviewRange(dir){
+  ensurePreviewWeek();
+  const step=previewMode===7?7:previewMode;
+  previewWeekStart.setDate(previewWeekStart.getDate()+dir*step);
+  if(previewMode===7)previewWeekStart=mondayOf(previewWeekStart.getFullYear(),previewWeekStart.getMonth()+1,previewWeekStart.getDate());
   renderPreview();
 }
 function jumpPreviewToday(){
   const t=new Date();
-  previewWeekStart=mondayOf(t.getFullYear(),t.getMonth()+1,t.getDate());
+  previewWeekStart=previewMode===7?mondayOf(t.getFullYear(),t.getMonth()+1,t.getDate()):new Date(t.getFullYear(),t.getMonth(),t.getDate());
   renderPreview();
 }
 function weekDates(){
   ensurePreviewWeek();
+  const n=previewMode===7?7:previewMode;
   const arr=[];
-  for(let i=0;i<7;i++){
+  for(let i=0;i<n;i++){
     const d=new Date(previewWeekStart);d.setDate(d.getDate()+i);
     arr.push(d);
   }
@@ -991,6 +1019,8 @@ function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()==
 
 function renderPreview(){
   ensurePreviewWeek();
+  ['1','3','7'].forEach(m=>document.getElementById(`mode-${m}`).classList.toggle('active',previewMode===Number(m)));
+
   const rows=buildRecords();
   const byDay={};rows.forEach(r=>{if(!byDay[r.isoKey])byDay[r.isoKey]=[];byDay[r.isoKey].push(r);});
   const daysAll=Object.keys(byDay).sort();
@@ -1004,7 +1034,8 @@ function renderPreview(){
 
   const days=weekDates();
   const today=new Date();
-  document.getElementById('preview-week-label').textContent=`${fmtDM(days[0])} → ${fmtDM(days[6])}`;
+  document.getElementById('preview-week-label').textContent=
+    days.length===1?fmtDM(days[0]):`${fmtDM(days[0])} → ${fmtDM(days[days.length-1])}`;
 
   // Header
   const dowShort=['CN','T2','T3','T4','T5','T6','T7'];
@@ -1015,25 +1046,30 @@ function renderPreview(){
   });
   document.getElementById('preview-grid-head').innerHTML=headHtml;
 
-  // Sections: VP Bà Điểm (ekip ca) + từng văn phòng khác
-  const sections=[{title:'8/6 Tiền Lân 20',shifts:BD_SHIFTS.map(sh=>({time:sh.time,label:sh.label,dataKey:sh.key,type:'bd'}))}];
+  // Sections: 8/6 Tiền Lân 20 (ekip ca) + từng văn phòng khác
+  const sections=[{title:'8/6 Tiền Lân 20',shifts:BD_SHIFTS.map(sh=>({time:sh.time,label:sh.label,dataKey:sh.key,kind:'bd',shiftType:sh.type}))}];
   officeList.forEach(o=>{
-    sections.push({title:o.name,shifts:o.shifts.map(s=>({time:s.time,label:s.type,dataKey:`o${o.id}-s${s.id}`,type:'other'}))});
+    sections.push({title:o.name,shifts:o.shifts.map(s=>({time:s.time,label:s.type,dataKey:`o${o.id}-s${s.id}`,kind:'other',shiftType:s.type}))});
   });
+
+  const dayKeys=days.map(d=>dateKey(d.getFullYear(),d.getMonth()+1,d.getDate()));
+  const totalByDay={};dayKeys.forEach(k=>totalByDay[k]=0);
 
   let bodyHtml='';
   sections.forEach(sec=>{
     if(!sec.shifts.length)return;
     sec.shifts.forEach((sh,idx)=>{
-      bodyHtml+=`<tr class="${idx===0?'grp-first':''}">`;
+      const rowCls=`shift-${(sh.shiftType||'').replace(/\s+/g,'-')}`;
+      bodyHtml+=`<tr class="${idx===0?'grp-first ':''}${rowCls}">`;
       if(idx===0){
         bodyHtml+=`<td class="loc-cell" rowspan="${sec.shifts.length}">${sec.title}</td>`;
       }
       bodyHtml+=`<td class="time-cell">${sh.label} · ${sh.time}</td>`;
-      days.forEach(d=>{
-        const key=dateKey(d.getFullYear(),d.getMonth()+1,d.getDate());
+      days.forEach((d,di)=>{
+        const key=dayKeys[di];
         const data=schedule[key];
-        const names=data?(sh.type==='bd'?(data.bd[sh.dataKey]||[]):(data.other[sh.dataKey]||[])):[];
+        const names=data?(sh.kind==='bd'?(data.bd[sh.dataKey]||[]):(data.other[sh.dataKey]||[])):[];
+        totalByDay[key]+=names.length;
         const isToday=isSameDay(d,today);
         if(names.length){
           bodyHtml+=`<td class="has-nv ${isToday?'today-col':''}"><u>${names.join(' + ')}</u></td>`;
@@ -1044,6 +1080,20 @@ function renderPreview(){
       bodyHtml+='</tr>';
     });
   });
+
+  // Dòng Tổng số người làm
+  bodyHtml+=`<tr class="row-total"><td colspan="2">Tổng số người làm</td>`;
+  dayKeys.forEach(k=>{bodyHtml+=`<td>${totalByDay[k]}</td>`;});
+  bodyHtml+='</tr>';
+
+  // Dòng OFF (đọc từ offSet đã đồng bộ ở tab OffRequests)
+  bodyHtml+=`<tr class="row-off"><td class="loc-cell" colspan="2">OFF</td>`;
+  dayKeys.forEach(k=>{
+    const offNames=[...offSet].filter(x=>x.startsWith(k+'|')).map(x=>x.split('|')[1]);
+    bodyHtml+=`<td>${offNames.length?offNames.join(' + '):'—'}</td>`;
+  });
+  bodyHtml+='</tr>';
+
   document.getElementById('preview-grid-body').innerHTML=bodyHtml || '<tr><td style="padding:20px;color:#999">Chưa có văn phòng/ca nào được cấu hình.</td></tr>';
 }
 function renderExport(){
