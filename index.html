@@ -143,7 +143,7 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
         <div class="day-label" id="day-label"></div>
         <div id="day-saved-badge" style="display:none;background:#E8F5E9;color:#2E7D32;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600">✓ Đã lưu</div>
         <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="fetchOffList()">🔄 Làm mới OFF</button>
+          <button class="btn btn-sm" onclick="fetchOffList(true)">🔄 Làm mới OFF</button>
           <button class="btn btn-danger btn-sm" onclick="clearDay()">Xóa ngày</button>
           <button class="btn btn-primary" onclick="saveDay()">✓ Lưu ngày</button>
         </div>
@@ -519,6 +519,8 @@ function changeDay(dir){
 // ── DANH SÁCH OFF (đồng bộ từ Google Sheet, tab OffRequests) ──
 let offSet=new Set(); // chứa key dạng "YYYY-MM-DD|TÊN_NV"
 const OFF_LS_KEY='sched_off_cache';
+const OFF_TS_KEY='sched_off_ts';
+const OFF_REFRESH_MS=24*60*60*1000; // 24 giờ
 function offKey(dateKey,name){return `${dateKey}|${name}`;}
 function isOff(dateKey,name){return offSet.has(offKey(dateKey,name));}
 function loadOffCache(){
@@ -528,9 +530,19 @@ function loadOffCache(){
   }catch(e){console.error('Lỗi đọc cache OFF:',e);}
 }
 function saveOffCache(){
-  try{localStorage.setItem(OFF_LS_KEY,JSON.stringify([...offSet]));}catch(e){}
+  try{
+    localStorage.setItem(OFF_LS_KEY,JSON.stringify([...offSet]));
+    localStorage.setItem(OFF_TS_KEY,String(Date.now()));
+  }catch(e){}
 }
-function fetchOffList(silent){
+function offCacheIsStale(){
+  const ts=Number(localStorage.getItem(OFF_TS_KEY)||0);
+  return (Date.now()-ts)>OFF_REFRESH_MS;
+}
+// force=true (bấm nút tay) → luôn tải mới. Không truyền → chỉ tải nếu cache đã quá 24h.
+function fetchOffList(force){
+  if(!force&&!offCacheIsStale())return; // còn hạn 24h, khỏi gọi mạng
+  const silent=!force;
   const u=(document.getElementById('gs-url')?.value||localStorage.getItem(GS_KEY)||'').trim();
   if(!u){if(!silent)toast('⚠️ Chưa có Apps Script URL (nhập ở tab Xuất dữ liệu)!');return;}
   const base=u.split('?')[0];
@@ -996,7 +1008,7 @@ function renderPreview(){
 
   // Header
   const dowShort=['CN','T2','T3','T4','T5','T6','T7'];
-  let headHtml=`<th class="corner" style="min-width:150px">Bộ phận / Thời gian</th>`;
+  let headHtml=`<th class="corner" colspan="2" style="min-width:150px">Bộ phận / Thời gian</th>`;
   days.forEach(d=>{
     const isToday=isSameDay(d,today);
     headHtml+=`<th class="${isToday?'today-col':''}" style="min-width:96px"><div>${fmtDM(d)}</div><div class="dow">${dowShort[d.getDay()]}</div></th>`;
@@ -1068,7 +1080,7 @@ initYearMonthSelect();
 setMonth(2026,6);
 renderNVList();
 renderOffices();
-fetchOffList(true); // âm thầm đồng bộ OFF list khi mở app (nếu đã có URL)
+fetchOffList(); // tự đồng bộ OFF nếu cache đã quá 24h (nếu còn hạn thì bỏ qua)
 </script>
 </body>
 </html>
