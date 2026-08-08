@@ -189,6 +189,7 @@ textarea{width:100%;height:200px;font-family:monospace;font-size:11px;padding:8p
         <div id="preview-week-label" style="font-size:13px;font-weight:600;color:#1F4E79;min-width:150px;text-align:center"></div>
         <button class="btn btn-sm" onclick="shiftPreviewRange(1)">▶</button>
         <button class="btn btn-sm" onclick="jumpPreviewToday()">Hôm nay</button>
+        <button class="btn btn-sm btn-primary" onclick="fetchScheduleFromSheet(true)">🔄 Tải lịch từ Sheet</button>
         <div style="margin-left:auto;font-size:11px;color:#999">Cuộn ngang để xem hết trên điện thoại →</div>
       </div>
     </div>
@@ -571,6 +572,32 @@ function fetchOffList(force){
       } else if(!silent){toast('⚠️ Không đọc được danh sách OFF.');}
     })
     .catch(err=>{console.error(err);if(!silent)toast('⚠️ Lỗi tải danh sách OFF.');});
+}
+
+// ── LỊCH LÀM VIỆC LẤY TRỰC TIẾP TỪ GOOGLE SHEET (tab Tổng hợp) ──
+// Vì mỗi thiết bị chỉ giữ dữ liệu cục bộ riêng, tab Tổng hợp cần đọc từ Sheet
+// (nguồn chung) thay vì chỉ đọc bộ nhớ tạm của trình duyệt đang mở.
+let previewRemoteRows=null; // null = chưa tải lần nào
+function fetchScheduleFromSheet(force){
+  const silent=!force;
+  const u=(document.getElementById('gs-url')?.value||localStorage.getItem(GS_KEY)||'').trim();
+  if(!u){if(!silent)toast('⚠️ Chưa có Apps Script URL (nhập ở tab Xuất dữ liệu)!');return Promise.resolve();}
+  const base=u.split('?')[0];
+  return fetch(`${base}?action=dashboard`)
+    .then(r=>r.json())
+    .then(res=>{
+      if(res && res.ok && Array.isArray(res.rows)){
+        previewRemoteRows=res.rows;
+        if(!silent)toast(`✓ Đã tải ${res.rows.length} dòng lịch từ Sheet`);
+        renderPreview();
+      } else if(!silent){toast('⚠️ Không tải được lịch từ Sheet.');}
+    })
+    .catch(err=>{console.error(err);if(!silent)toast('⚠️ Lỗi tải lịch từ Sheet.');});
+}
+// So khớp 1 dòng RawData với đúng bộ phận/ca đang hiển thị trên bảng
+function rowMatchesSection(row,secTitle){
+  if(secTitle==='8/6 Tiền Lân 20')return (row.bp||'').startsWith('8/6 Tiền Lân 20');
+  return (row.bp||'').trim()===secTitle.trim();
 }
 
 // ── RENDER BÀ ĐIỂM ────────────────────────────────────────
@@ -1055,6 +1082,17 @@ function renderPreview(){
   const dayKeys=days.map(d=>dateKey(d.getFullYear(),d.getMonth()+1,d.getDate()));
   const totalByDay={};dayKeys.forEach(k=>totalByDay[k]=0);
 
+  // Nếu đã tải được dữ liệu từ Sheet, gom theo "ngày|bộ phận|giờ ca" → dùng cái này làm nguồn chính.
+  // Chưa tải lần nào (previewRemoteRows===null) thì tạm dùng schedule cục bộ để không hiện trống trơn.
+  const remoteMap=previewRemoteRows?{}:null;
+  if(previewRemoteRows){
+    previewRemoteRows.forEach(r=>{
+      const k=`${r.date}|${r.bp}|${r.ca}`;
+      if(!remoteMap[k])remoteMap[k]=[];
+      remoteMap[k].push(r.nv);
+    });
+  }
+
   let bodyHtml='';
   sections.forEach(sec=>{
     if(!sec.shifts.length)return;
@@ -1067,8 +1105,20 @@ function renderPreview(){
       bodyHtml+=`<td class="time-cell">${sh.label} · ${sh.time}</td>`;
       days.forEach((d,di)=>{
         const key=dayKeys[di];
-        const data=schedule[key];
-        const names=data?(sh.kind==='bd'?(data.bd[sh.dataKey]||[]):(data.other[sh.dataKey]||[])):[];
+        let names;
+        if(remoteMap){
+          // tìm đúng bộ phận (bp có thể lệch chữ, dùng rowMatchesSection để so khớp)
+          names=[];
+          Object.keys(remoteMap).forEach(mk=>{
+            const [mDate,mBp,mCa]=mk.split('|');
+            if(mDate===key&&mCa===sh.time&&rowMatchesSection({bp:mBp},sec.title)){
+              names=names.concat(remoteMap[mk]);
+            }
+          });
+        }else{
+          const data=schedule[key];
+          names=data?(sh.kind==='bd'?(data.bd[sh.dataKey]||[]):(data.other[sh.dataKey]||[])):[];
+        }
         totalByDay[key]+=names.length;
         const isToday=isSameDay(d,today);
         if(names.length){
@@ -1111,7 +1161,10 @@ function switchTab(t,el){
   ['input','preview','export','nv','office'].forEach(id=>{
     document.getElementById('tab-'+id).style.display=id===t?'':'none';
   });
-  if(t==='preview')renderPreview();
+  if(t==='preview'){
+    renderPreview(); // hiện tạm dữ liệu cục bộ trong lúc chờ
+    if(previewRemoteRows===null)fetchScheduleFromSheet(false); // lần đầu vào tab thì tự tải từ Sheet
+  }
   if(t==='export')renderExport();
   if(t==='nv')renderNVList();
   if(t==='office')renderOffices();
