@@ -1079,6 +1079,29 @@ function renderPreview(){
     sections.push({title:o.name,shifts:o.shifts.map(s=>({time:s.time,label:s.type,dataKey:`o${o.id}-s${s.id}`,kind:'other',shiftType:s.type}))});
   });
 
+  // Tự phát hiện & thêm các ca có GIỜ TUỲ CHỈNH (không khớp giờ chuẩn đã cấu hình)
+  // để không bị rớt mất khỏi bảng — quét toàn bộ dữ liệu đã tải từ Sheet, không giới hạn theo tuần đang xem
+  // để cấu trúc bảng ổn định khi chuyển qua lại các tuần.
+  if(previewRemoteRows){
+    const extraByTitle={}; // { sectionTitle: { "giờ ca": {time,label,shiftType} } }
+    previewRemoteRows.forEach(r=>{
+      if(!r.ca)return;
+      const ownerSec=sections.find(sec=>rowMatchesSection(r,sec.title));
+      const alreadyKnown=ownerSec&&ownerSec.shifts.some(sh=>sh.time===r.ca);
+      if(alreadyKnown)return;
+      const title=ownerSec?ownerSec.title:(r.bp||'Chưa phân loại (kiểm tra cột Bộ phận)');
+      if(!extraByTitle[title])extraByTitle[title]={};
+      if(!extraByTitle[title][r.ca]){
+        extraByTitle[title][r.ca]={time:r.ca,label:(r.loai||'Ca tuỳ chỉnh')+' ⚙️',shiftType:r.loai||'',kind:'other',dataKey:null};
+      }
+    });
+    Object.keys(extraByTitle).forEach(title=>{
+      let sec=sections.find(s=>s.title===title);
+      if(!sec){sec={title,shifts:[]};sections.push(sec);}
+      sec.shifts.push(...Object.values(extraByTitle[title]));
+    });
+  }
+
   const dayKeys=days.map(d=>dateKey(d.getFullYear(),d.getMonth()+1,d.getDate()));
   const totalByDay={};dayKeys.forEach(k=>totalByDay[k]=0);
 
